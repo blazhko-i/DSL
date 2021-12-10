@@ -1,0 +1,108 @@
+from copy import deepcopy
+
+
+def productive_symbols(grammar) -> set:
+    productive = set()
+    prev_count = None
+
+    def check_unproductive_symbols(rule: str) -> bool:
+        for s in rule:
+            if s not in productive and s not in grammar['toks']:  # Проверяем есть ли элемент в списке токенов или продуктивных символов. Если хотя бы один элемент из правила не удовлетворяет условию => False
+                return False
+        return True
+
+    while len(productive) != prev_count:
+        prev_count = len(productive)
+        productive_symbols = set()
+
+        for var, definition in grammar['vars'].items():  # items возвращает пары ключ/значение
+            if (list(
+                    filter(check_unproductive_symbols,
+                           definition)) == []): continue  # Удаляем все не продуктивные символы
+            productive_symbols.add(var)
+        productive = productive.union(set(productive_symbols))
+    return productive
+
+
+def reachable_symbols(grammar) -> set:
+    reachable = {grammar['hvar']}
+    prev_count = None
+
+    while len(reachable) != prev_count:
+        prev_count = len(reachable)
+        for var, definition in grammar['vars'].items():
+            if var in reachable:
+                for rule in definition:
+                    reachable = reachable.union(set(filter(lambda s: s not in grammar['toks'], rule)))
+    return reachable
+
+
+def remove_useless_symbols(grammar):
+    grammar_copy = deepcopy(grammar)
+    productive = productive_symbols(grammar)
+    grammar_copy_vars = {}
+
+    for var, definition in grammar_copy['vars'].items(): # Удаляем непродуктивные символы
+        buffer = list()
+        for rule in definition:
+            if all(map(lambda s: s in productive or s in grammar['toks'], rule)): buffer.append(rule)
+        grammar_copy_vars[var] = buffer
+
+    grammar_copy['vars'] = grammar_copy_vars
+    reachable = reachable_symbols(grammar_copy)
+    grammar_copy_vars = {}
+
+    for var, definition in grammar_copy['vars'].items(): # Удаляем непродуктивные символы
+        buffer = list()
+        if var not in reachable: continue
+        for rule in definition:
+            if all(map(lambda s: s in reachable or s in grammar['toks'], rule)): buffer.append(rule)
+        grammar_copy_vars[var] = buffer
+
+    grammar_copy['vars'] = grammar_copy_vars
+    return grammar_copy
+
+
+def vanishing_symbols(grammar) -> set:
+    vanishing = set()
+    vanishing_symbols = set()
+    prev_count = None
+
+    def all_vanishing_symbols(rule: str) -> bool:
+        return all(map(lambda s: s in vanishing or s == (0, ''), rule))
+
+    while len(vanishing) != prev_count:
+        prev_count = len(vanishing)
+
+        for var, definition in grammar['vars'].items():
+            if (list(
+                    filter(all_vanishing_symbols,
+                           definition)) == []): continue
+            vanishing_symbols.add(var)
+        vanishing = vanishing.union(set(vanishing_symbols))
+
+    return vanishing
+
+
+def test():
+    grammar = {
+        'toks': {(0, ''), (1, 'a'), (2, 'b'), (3, 'c')},
+        'vars': {
+            'S': [[(1, 'a'), 'M'],
+                  [(1, 'a'), 'S'],
+                  ['K']],
+            'K': [[(3, 'c')],
+                  [(0, '')]],
+            'M': [['M', 'P']],
+            'P': [[(3, 'c')]]
+        },
+        'hvar': 'S'
+    }
+
+    grammar = remove_useless_symbols(grammar)
+    print(grammar)
+
+    print('Nullable symbols are ' + str(vanishing_symbols(grammar)))
+
+
+test()
